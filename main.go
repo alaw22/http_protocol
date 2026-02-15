@@ -6,6 +6,7 @@ import (
 		"fmt"
 		"io"
 		"errors"
+		"strings"
 )
 
 const inputFilePath = "messages.txt"
@@ -22,10 +23,17 @@ func main(){
 	}
 	defer f.Close()
 
+	currentLineContents := ""
 	for {
 
 		n, err := f.Read(b)
 		if err != nil {
+
+			if currentLineContents != "" {
+				fmt.Printf("read: %s\n", currentLineContents)
+				currentLineContents = ""
+			}
+
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -35,7 +43,15 @@ func main(){
 		}
 
 		str := string(b[:n])
-		fmt.Printf("read: %s\n",str)
+		parts := strings.Split(str,"\n")
+		for i := 0; i < len(parts)-1; i++ {
+			fmt.Printf("read: %s%s\n", currentLineContents, parts[i])
+			currentLineContents = ""
+		}
+
+		currentLineContents += parts[len(parts)-1]
 
 	}
+
+
 }
