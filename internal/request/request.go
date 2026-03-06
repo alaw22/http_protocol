@@ -1,6 +1,8 @@
 package request
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -8,8 +10,8 @@ import (
 
 type Request struct {
 	RequestLine RequestLine
-	Headers     map[string]string
-	Body        []byte
+
+	state requestState // 1 = done; 0 = initialized
 }
 
 type RequestLine struct {
@@ -18,59 +20,132 @@ type RequestLine struct {
 	Method        string
 }
 
-func (r *Request) parseRequestLine(data []byte) error {
-	str := string(data)
-	requestline := strings.Split(str, "\r\n")[0]
-	requestParts := strings.Split(requestline, " ")
+type requestState int
+
+const (
+	requestStateInitialized requestState = iota
+	requestStateDone
+)
+
+const crlf = "\r\n"
+const bufferSize = 8
+
+func (r *Request) parse(data []byte) (int, error) {
+
+	switch r.state {
+	case requestStateInitialized:
+		requestLine, n, err := parseRequestLine(data)
+
+		if err != nil {
+			return 0, err
+		}
+
+		// if we get passed the top part then err == nil
+		if n == 0 {
+			return 0, nil
+		}
+
+		r.RequestLine = *requestLine
+		r.state = requestStateDone
+
+		return n, nil
+
+	case requestStateDone:
+		return 0, fmt.Errorf("error: trying to read data in a done state")
+
+	default:
+		return 0, fmt.Errorf("error: unknown request state")
+	}
+}
+
+func parseRequestLine(data []byte) (*RequestLine, int, error) {
+	rl := &RequestLine{}
+
+	idx := bytes.Index(data, []byte(crlf))
+	if idx == -1 {
+		return nil, 0, nil
+	}
+
+	requestLineText := string(data[:idx])
+
+	requestParts := strings.Split(requestLineText, " ")
 
 	if len(requestParts) != 3 {
-		return fmt.Errorf("Request line should have 3 items delimited by a space: %v\n", requestParts)
+		return nil, 0, fmt.Errorf("Request line should have 3 items delimited by a space: %v\n", requestParts)
 	}
 
 	// Check that the request method is all capital letters
 	method_bytes := []byte(requestParts[0])
 	for _, char := range method_bytes {
 		if char < 65 || char > 90 {
-			return fmt.Errorf("HTTP Method contains either a non-capital letter or non-letter '%s'\n", r.RequestLine.Method)
+			return nil, 0, fmt.Errorf("HTTP Method contains either a non-capital letter or non-letter '%s'\n", rl.Method)
 		}
 	}
 
 	httpversionParts := strings.Split(requestParts[2], "/")
 	// Check that httpversion split on / has 2 parts
 	if len(httpversionParts) != 2 {
-		return fmt.Errorf("malformed start-line: '%s'\n", str)
+		return nil, 0, fmt.Errorf("malformed start-line: '%s'\n", requestLineText)
 	}
 
-	// Check that the protocol is HTTP
+	// n, Check that the protocol is HTTP
 	if httpversionParts[0] != "HTTP" {
-		return fmt.Errorf("Unrecognized HTTP version: '%s'\n", requestParts[2])
+		return nil, 0, fmt.Errorf("Unrecognized HTTP version: '%s'\n", requestParts[2])
 	}
 
 	// Check that the version of the HTTP protocol is correct
 	if httpversionParts[1] != "1.1" {
-		return fmt.Errorf("Unrecognized HTTP version: '%s'\n", requestParts[2])
+		return nil, 0, fmt.Errorf("Unrecognized HTTP version: '%s'\n", requestParts[2])
 	}
 
-	r.RequestLine.Method = requestParts[0]
-	r.RequestLine.RequestTarget = requestParts[1]
-	r.RequestLine.HttpVersion = httpversionParts[1]
+	rl.Method = requestParts[0]
+	rl.RequestTarget = requestParts[1]
+	rl.HttpVersion = httpversionParts[1]
 
-	return nil
+	return rl, idx + 2, nil
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	r := &Request{}
-
-	// read from reader
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
+	r := &Request{
+		state: requestStateInitialized,
 	}
 
-	err = r.parseRequestLine(data)
-	if err != nil {
-		return nil, err
+	bytes_buffer := make([]byte, bufferSize)
+
+	readToIndex := 0 // keeps track of how much data we've read from the `io.Reader` into the buffer
+
+	for r.state != requestStateDone {
+		if readToIndex >= len(bytes_buffer) {
+			temp := make([]byte, len(bytes_buffer)*2)
+			copy(temp, bytes_buffer)
+			bytes_buffer = temp
+		}
+
+		// read from buffer starting at readToIndex
+
+		numBytesRead, err := reader.Read(bytes_buffer[readToIndex:])
+
+		if errors.Is(err, io.EOF) {
+			r.state = 1
+			break
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		readToIndex += numBytesRead
+
+		numBytesParsed, err := r.parse(bytes_buffer[:readToIndex])
+		if err != nil {
+			return nil, err
+		}
+
+		copy(bytes_buffer, bytes_buffer[numBytesParsed:])
+		readToIndex -= numBytesParsed
 	}
+
+	// parse just the request line from data
 
 	return r, nil
 }
