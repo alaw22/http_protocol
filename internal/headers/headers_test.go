@@ -68,4 +68,17 @@ func TestHeadersParse(t *testing.T) {
 	fmt.Println("Error:", err.Error())
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
+
+	// Test: Two identical header names but with different values
+	headers = NewHeaders()
+	data = []byte("Set-Person: Alex\r\nSet-Person: Vanessa      \r\n\r\n")
+	n, done, err = headers.Parse(data)
+	assert.Equal(t, "Alex", headers["set-person"])
+	assert.Equal(t, 18, n)
+	assert.False(t, done)
+	n, done, err = headers.Parse(data[n:])
+	assert.Equal(t, "Alex, Vanessa", headers["set-person"])
+	assert.Equal(t, 27, n)
+	assert.False(t, done)
+
 }

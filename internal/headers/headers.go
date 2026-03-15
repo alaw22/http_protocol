@@ -47,7 +47,11 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	trimmedFieldValue := strings.TrimSpace(fieldValue)
 	lowerFieldName := strings.ToLower(fieldName)
 
-	h[lowerFieldName] = trimmedFieldValue
+	if val, ok := h[lowerFieldName]; ok {
+		h[lowerFieldName] = fmt.Sprintf("%s, %s", val, trimmedFieldValue)
+	} else {
+		h[lowerFieldName] = trimmedFieldValue
+	}
 
 	return idx + 2, false, nil
 }
