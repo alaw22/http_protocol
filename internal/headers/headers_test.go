@@ -49,7 +49,7 @@ func TestHeadersParse(t *testing.T) {
 	assert.Equal(t, 30, n)
 	assert.False(t, done)
 	n, done, err = headers.Parse(data[n:])
-	assert.Equal(t, 0, n)
+	assert.Equal(t, 2, n)
 	assert.True(t, done)
 
 	// Test: Invalid spacing header

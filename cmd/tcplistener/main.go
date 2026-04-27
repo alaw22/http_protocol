@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	"http_protocol/internal/request"
+	"github.com/alaw22/http_protocol/internal/request"
 )
 
 const inputFilePath = "messages.txt"
@@ -36,6 +36,11 @@ func main() {
 			req.RequestLine.Method,
 			req.RequestLine.RequestTarget,
 			req.RequestLine.HttpVersion)
+
+		fmt.Println("Headers:")
+		for key, val := range req.Headers {
+			fmt.Printf(" - %s: %s\n", key, val)
+		}
 
 		fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
 

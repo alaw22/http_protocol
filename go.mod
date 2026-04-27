@@ -1,4 +1,4 @@
-module http_protocol
+module github.com/alaw22/http_protocol
 
 go 1.24.4
 

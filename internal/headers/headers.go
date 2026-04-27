@@ -22,7 +22,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	// if the CRLF is the first thing encountered in the bytes slice
 	// then we have reached the end of the headers section
 	if idx == 0 {
-		return 0, true, nil
+		return 2, true, nil
 	}
 
 	fieldLineText := string(data[:idx])
